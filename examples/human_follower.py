@@ -23,13 +23,14 @@ The servo uses exponential smoothing for smooth motion, and the LED indicates
 when a person is detected.
 """
 
+from __future__ import annotations
 import time
 import board
 import pwmio
 from adafruit_motor import servo
 from micropython import const
 from digitalio import DigitalInOut
-from grove_vision_ai_v2 import ATDevice, CMD_OK
+from grove_vision_ai_v2 import ATDevice, CMD_OK, Box
 
 
 # Configuration
@@ -62,7 +63,7 @@ motor.angle = target_angle  # [0..180]
 smoothed_angle = target_angle
 
 
-def enable_led(value):
+def enable_led(value: bool) -> None:
     """Enable or disable the indicator LED.
 
     Args:
@@ -72,7 +73,7 @@ def enable_led(value):
     led.value = not bool(value)
 
 
-def set_motor(target_angle):
+def set_motor(target_angle: float | None) -> None:
     """Set the servo motor angle with exponential smoothing.
 
     Applies exponential smoothing to prevent jerky motion. The smoothing
@@ -90,7 +91,7 @@ def set_motor(target_angle):
     # print(f"target: {target_angle}, new: {smoothed_angle}")  # DEBUG
 
 
-def centroid_to_angle(x):
+def centroid_to_angle(x: int) -> float:
     """Convert image x-coordinate to servo angle.
 
     Maps camera x-coordinate (0-240 pixels) to servo angle (0-180 degrees).
@@ -105,7 +106,7 @@ def centroid_to_angle(x):
     return 90 + (x - HALF_IMAGE_WIDTH) * PIXEL_SCALE
 
 
-def get_best_box_angle(boxes):
+def get_best_box_angle(boxes: list[Box]) -> float | None:
     """Select the best detection box and convert to servo angle.
 
     Chooses the widest detection box (assumed to be the nearest person)

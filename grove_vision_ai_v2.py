@@ -45,6 +45,7 @@ Implementation Notes
 """
 
 # imports
+from __future__ import annotations
 import time
 import json
 import binascii
@@ -120,12 +121,12 @@ class Perf:
         postprocess: Postprocessing time in milliseconds.
     """
 
-    def __init__(self, preprocess=0, inference=0, postprocess=0):
+    def __init__(self, preprocess: int = 0, inference: int = 0, postprocess: int = 0) -> None:
         self.preprocess = preprocess
         self.inference = inference
         self.postprocess = postprocess
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Perf(pre={self.preprocess}, inference={self.inference}, post={self.postprocess})"
 
 
@@ -143,7 +144,7 @@ class Box:
         target: Target class index.
     """
 
-    def __init__(self, x, y, w, h, score, target):
+    def __init__(self, x: int, y: int, w: int, h: int, score: int, target: int) -> None:
         self.x = x
         self.y = y
         self.w = w
@@ -151,26 +152,26 @@ class Box:
         self.score = score
         self.target = target
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Box(x={self.x}, y={self.y}, w={self.w}, h={self.h}, score={self.score}, target={self.target})"
 
     @property
-    def left(self):
+    def left(self) -> float:
         """Left edge x-coordinate of the box."""
         return self.x - self.w / 2
 
     @property
-    def right(self):
+    def right(self) -> float:
         """Right edge x-coordinate of the box."""
         return self.x + self.w / 2
 
     @property
-    def top(self):
+    def top(self) -> float:
         """Top edge y-coordinate of the box."""
         return self.y - self.h / 2
 
     @property
-    def bottom(self):
+    def bottom(self) -> float:
         """Bottom edge y-coordinate of the box."""
         return self.y + self.h / 2
 
@@ -183,11 +184,11 @@ class Class:
         target: Target class index.
     """
 
-    def __init__(self, score, target):
+    def __init__(self, score: int, target: int) -> None:
         self.score = score
         self.target = target
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Class(target={self.target}, score={self.score})"
 
 
@@ -201,13 +202,13 @@ class Point:
         target: Target point index.
     """
 
-    def __init__(self, x, y, score, target):
+    def __init__(self, x: int, y: int, score: int, target: int) -> None:
         self.x = x
         self.y = y
         self.score = score
         self.target = target
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Point(x={self.x}, y={self.y}, score={self.score}, target={self.target})"
 
 
@@ -221,11 +222,11 @@ class Keypoint:
         points: List of Point objects representing keypoints/landmarks.
     """
 
-    def __init__(self, box: Box, points: list[Point]):
+    def __init__(self, box: Box, points: list[Point]) -> None:
         self.box = box
         self.points = points
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Keypoint(box={repr(self.box)}, points={repr(self.points)})"
 
 
@@ -236,13 +237,13 @@ class Image:
         data: Raw JPEG image bytes.
     """
 
-    def __init__(self, base64):
+    def __init__(self, base64: str) -> None:
         """Initialize Image from base64-encoded string.
 
         Args:
             base64: Base64-encoded JPEG image data from the AI board.
         """
-        self.data = binascii.a2b_base64(base64)
+        self.data: bytes = binascii.a2b_base64(base64)
 
 
 class ATDevice:
@@ -272,7 +273,9 @@ class ATDevice:
         ...     print(f"Detected {len(ai.boxes)} objects")
     """
 
-    def __init__(self, uart_tx, uart_rx, uart_bufsize=1024, bufsize=1024):
+    def __init__(
+        self, uart_tx, uart_rx, uart_bufsize: int = 1024, bufsize: int = 1024
+    ) -> None:
         """Initialize communication with the Grove Vision AI V2 board.
 
         Args:
@@ -318,68 +321,68 @@ class ATDevice:
         self._version = None
 
     @property
-    def response_bufsize(self):
+    def response_bufsize(self) -> int:
         return len(self._response_buffer)
 
     @response_bufsize.setter
-    def response_bufsize(self, value):
-        self._response_buffer = None
-        self._mv = None
+    def response_bufsize(self, value: int) -> None:
+        self._response_buffer = None  # type: ignore
+        self._mv = None  # type: ignore
         gc.collect()
         self._response_buffer = bytearray(value)
         self._mv = memoryview(self._response_buffer)
 
     @property
-    def response(self):
+    def response(self) -> dict | None:
         return self._response
 
     @property
-    def debug(self):
+    def debug(self) -> bool:
         return self._debug
 
     @debug.setter
-    def debug(self, value):
+    def debug(self, value: bool) -> None:
         self._debug = value
 
     @property
-    def perf(self):
+    def perf(self) -> Perf:
         return self._perf
 
     @property
-    def boxes(self):
+    def boxes(self) -> list[Box]:
         return self._boxes
 
     @property
-    def classes(self):
+    def classes(self) -> list[Class]:
         return self._classes
 
     @property
-    def keypoints(self):
+    def keypoints(self) -> list[Keypoint]:
         return self._keypoints
 
     @property
-    def points(self):
+    def points(self) -> list[Point]:
         return self._points
 
     @property
-    def image(self):
+    def image(self) -> Image | None:
         return self._image
 
-    def _send_command(self, command, tag=None):
+    def _send_command(self, command: str, tag: str | None = None) -> None:
         if tag:
             full_command = f"AT+{tag}@{command}\r\n"
         else:
             full_command = f"AT+{command}\r\n"
         if self.debug:
             print(f"=> {full_command}")
-        full_command = full_command.encode("utf-8")
-        self._last_full_command = full_command
-        self.uart.write(full_command)
+        full_command_bytes = full_command.encode("utf-8")
+        self._last_full_command = full_command_bytes
+        self.uart.write(full_command_bytes)
 
-    def _retry_command(self):
+    def _retry_command(self) -> None:
         self.uart.write(self._last_full_command)
 
-    def _fetch_response(self, timeout):
+    def _fetch_response(self, timeout: float) -> str | None:
         """Receive and return the next full JSON response as a string.
 
         Handles buffering of multiple JSON responses and caches remaining data
@@ -436,7 +439,7 @@ class ATDevice:
             )
         return None
 
-    def _parse_event(self, response: dict):
+    def _parse_event(self, response: dict) -> None:
         """Handle a JSON event response (type=CMD_TYPE_EVENT).
 
         Extracts inference results (boxes, classes, points, keypoints, images)
@@ -485,12 +488,12 @@ class ATDevice:
         else:
             self._image = None
 
-    def _parse_log(self, response: dict):
+    def _parse_log(self, response: dict) -> None:
         """Handle a log JSON response (type=CMD_TYPE_LOG)."""
         # print(response)
         pass
 
-    def _wait(self, type: int, cmd: str, timeout: float = 1.0):
+    def _wait(self, response_type: int, cmd: str, timeout: float = 1.0) -> int:
         end_time = now() + timeout
         while now() < end_time:
             resp = self._fetch_response(timeout)
@@ -498,7 +501,7 @@ class ATDevice:
                 continue
             response = self._response = self._parse_json(resp)
 
-            retval = response["code"]
+            retval: int = response["code"]
             if response["type"] == CMD_TYPE_EVENT:
                 self._parse_event(response)
             elif response["type"] == CMD_TYPE_LOG:
@@ -507,25 +510,27 @@ class ATDevice:
 
             # Get the command up to the first "="
             base_cmd = cmd.split("=")[0]
-            if response["type"] == type and response["name"] == base_cmd:
+            if response["type"] == response_type and response["name"] == base_cmd:
                 return retval
             # else discard this reply
 
         return CMD_ETIMEDOUT
 
-    def _flush_serial(self):
+    def _flush_serial(self) -> str:
         resp = ""
         while self.uart.in_waiting > 0:
-            resp += self.uart.read().decode("utf-8")
+            data = self.uart.read()
+            if data:
+                resp += data.decode("utf-8")
         return resp
 
-    def _parse_json(self, response):
+    def _parse_json(self, response: str) -> dict:
         try:
             return json.loads(response)
-        except ValueError:
-            raise DecodeError(f"Failed to decode JSON response {response}")
+        except ValueError as exc:
+            raise DecodeError(f"Failed to decode JSON response {response}") from exc
 
-    def invoke(self, times: int, diffonly: bool, resultonly: bool, timeout=0.1):
+    def invoke(self, times: int, diffonly: bool, resultonly: bool, timeout: float = 0.1) -> int:
         """Run inference on the loaded model.
 
         Results are stored in instance attributes (boxes, classes, points, keypoints, perf).
@@ -549,7 +554,7 @@ class ATDevice:
             return self._wait(CMD_TYPE_EVENT, CMD_AT_INVOKE, timeout)
         return err
 
-    def sample_image(self, times: int = 1, timeout=0.1):
+    def sample_image(self, times: int = 1, timeout: float = 0.1) -> int:
         """Capture an image from the camera without running inference.
 
         The image data is stored in the `image` attribute as an Image object.
@@ -571,7 +576,7 @@ class ATDevice:
             return self._wait(CMD_TYPE_EVENT, CMD_AT_SAMPLE, timeout)
         return err
 
-    def id(self, cache=True):
+    def id(self, cache: bool = True) -> str | None:
         """Get the device ID.
 
         Args:
@@ -585,11 +590,12 @@ class ATDevice:
 
         self._send_command(CMD_AT_ID)
         if self._wait(CMD_TYPE_RESPONSE, CMD_AT_ID) == CMD_OK:
-            self._id = self._response["data"]
-            return self._id
+            if self._response:
+                self._id = self._response["data"]
+                return self._id
         return None
 
-    def name(self, cache=True):
+    def name(self, cache: bool = True) -> str | None:
         """Get the device name.
 
         Args:
@@ -603,11 +609,12 @@ class ATDevice:
 
         self._send_command(CMD_AT_NAME)
         if self._wait(CMD_TYPE_RESPONSE, CMD_AT_NAME, 3.0) == CMD_OK:
-            self._name = self._response["data"]
-            return self._name
+            if self._response:
+                self._name = self._response["data"]
+                return self._name
         return None
 
-    def version(self, cache=True):
+    def version(self, cache: bool = True) -> dict | None:
         """Get the firmware version information.
 
         Args:
@@ -621,11 +628,12 @@ class ATDevice:
 
         self._send_command(CMD_AT_VERSION)
         if self._wait(CMD_TYPE_RESPONSE, CMD_AT_VERSION) == CMD_OK:
-            self._version = self.response["data"]
-            return self._version
+            if self.response:
+                self._version = self.response["data"]
+                return self._version
         return None
 
-    def at_api(self):
+    def at_api(self) -> str | None:
         """Get the AT API version string.
 
         Returns:
@@ -636,7 +644,7 @@ class ATDevice:
             return ver["at_api"]
         return None
 
-    def info(self, cache=True):
+    def info(self, cache: bool = True) -> str | None:
         """Get the model information as a base64-encoded string.
 
         Use model_info() to get the decoded model metadata.
@@ -652,11 +660,12 @@ class ATDevice:
 
         self._send_command(CMD_AT_INFO)
         if self._wait(CMD_TYPE_RESPONSE, CMD_AT_INFO, 3.0) == CMD_OK:
-            self._info = self._response["data"]["info"]
-            return self._info
+            if self._response:
+                self._info = self._response["data"]["info"]
+                return self._info
         return None
 
-    def model_info(self) -> dict or None:
+    def model_info(self) -> dict | None:
         """
         For a model loaded from the Sensecraft web site, return a dict describing the model.
         
@@ -693,7 +702,7 @@ class ATDevice:
         except ValueError:
             return inf
 
-    def clean_actions(self):
+    def clean_actions(self) -> int:
         """Clear all configured actions.
 
         Returns:
@@ -702,7 +711,7 @@ class ATDevice:
         self._send_command(f'{CMD_AT_ACTION}=""')
         return self._wait(CMD_TYPE_RESPONSE, CMD_AT_ACTION)
 
-    def save_jpeg(self):
+    def save_jpeg(self) -> int:
         """Configure the board to save captured images to SD card.
 
         Requires an SD card to be mounted on the AI board. Use clean_actions()
@@ -714,7 +723,7 @@ class ATDevice:
         self._send_command(f'{CMD_AT_ACTION}="{CMD_AT_SAVE_JPEG}"')
         return self._wait(CMD_TYPE_RESPONSE, CMD_AT_ACTION)
 
-    def perform_command(self, cmd: str, tag: str = None):
+    def perform_command(self, cmd: str, tag: str | None = None) -> int:
         """Perform a raw AT command.
 
         The response will be available in self.response.
