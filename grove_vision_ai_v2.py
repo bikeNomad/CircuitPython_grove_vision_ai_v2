@@ -46,10 +46,12 @@ Implementation Notes
 
 # imports
 from __future__ import annotations
-import time
-import json
+
 import binascii
 import gc
+import json
+import time
+
 import busio
 from micropython import const
 
@@ -273,9 +275,7 @@ class ATDevice:
         ...     print(f"Detected {len(ai.boxes)} objects")
     """
 
-    def __init__(
-        self, uart_tx, uart_rx, uart_bufsize: int = 1024, bufsize: int = 1024
-    ) -> None:
+    def __init__(self, uart_tx, uart_rx, uart_bufsize: int = 1024, bufsize: int = 1024) -> None:
         """Initialize communication with the Grove Vision AI V2 board.
 
         Args:
@@ -285,7 +285,7 @@ class ATDevice:
                           Increase if bytes are being lost.
             bufsize: Size of response buffer in bytes for JSON parsing. Default 1024.
                      Increase if responses are being truncated.
-        
+
         Note:
             Even with adequate buffer sizes,
             using `invoke()` or `sample_image()` to capture images runs
@@ -668,7 +668,7 @@ class ATDevice:
     def model_info(self) -> dict | None:
         """
         For a model loaded from the Sensecraft web site, return a dict describing the model.
-        
+
         Example:
 
         .. code-block:: python

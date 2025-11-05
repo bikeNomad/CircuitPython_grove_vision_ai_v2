@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 Ned Konz for Metamagix
+#
+# SPDX-License-Identifier: MIT
+#
 HERE=$(PWD)
 MPY_CROSS?=~/src/Micropython/circuitpython/mpy-cross/build/mpy-cross
 CPY_DRIVE?=/Volumes/CIRCUITPY

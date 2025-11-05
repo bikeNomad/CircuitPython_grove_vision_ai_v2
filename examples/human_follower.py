@@ -24,14 +24,16 @@ when a person is detected.
 """
 
 from __future__ import annotations
+
 import time
+
 import board
 import pwmio
 from adafruit_motor import servo
-from micropython import const
 from digitalio import DigitalInOut
-from grove_vision_ai_v2 import ATDevice, CMD_OK, Box
+from micropython import const
 
+from grove_vision_ai_v2 import CMD_OK, ATDevice, Box
 
 # Configuration
 # Scaling (pixels to degrees)
