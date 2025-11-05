@@ -1,5 +1,5 @@
 Human Follower
-------------
+--------------
 
 This example uses a servo motor to point at humans detected by the "People detection" model.
 

@@ -9,3 +9,6 @@ API Reference
 
 .. automodule:: grove_vision_ai_v2
     :members:
+    :undoc-members:
+    :show-inheritance:
+
