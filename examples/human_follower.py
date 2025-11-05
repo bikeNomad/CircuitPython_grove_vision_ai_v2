@@ -1,12 +1,26 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025 Ned Konz for Metamagix
 #
 # SPDX-License-Identifier: MIT
-"""
-This uses a pre-trained model (people detector or face detector) to
-drive a servo motor to point to people.
+"""Human Follower Example for Grove Vision AI V2.
 
-Copy this file to your CIRCUITPY volume (as main.py) along with the grove_vision_ai_v2 library.
-Ensure you've deleted the code.py file.
+This example uses a pre-trained object detection model (person or face detector)
+to control a servo motor that tracks detected people. The servo pans to follow
+the nearest person detected in the camera's field of view.
+
+Hardware Requirements:
+    - CircuitPython board (Seeed XIAO or Adafruit QtPy recommended)
+    - Grove Vision AI V2 board with camera
+    - Servo motor connected to D0
+    - LED for visual feedback (uses LED_BLUE by default)
+
+Setup:
+    1. Flash a person or face detection model to the Grove Vision AI V2
+    2. Copy this file to CIRCUITPY volume as main.py
+    3. Copy grove_vision_ai_v2.mpy to CIRCUITPY/lib/
+    4. Delete code.py if present
+
+The servo uses exponential smoothing for smooth motion, and the LED indicates
+when a person is detected.
 """
 
 import time
@@ -14,8 +28,8 @@ import board
 import pwmio
 from adafruit_motor import servo
 from micropython import const
-from grove_vision_ai_v2 import ATDevice, CMD_OK
 from digitalio import DigitalInOut
+from grove_vision_ai_v2 import ATDevice, CMD_OK
 
 
 # Configuration
@@ -49,9 +63,25 @@ smoothed_angle = target_angle
 
 
 def enable_led(value):
+    """Enable or disable the indicator LED.
+
+    Args:
+        value: True to turn LED on, False to turn off.
+            Note: LED logic is inverted (low = on).
+    """
     led.value = not bool(value)
 
+
 def set_motor(target_angle):
+    """Set the servo motor angle with exponential smoothing.
+
+    Applies exponential smoothing to prevent jerky motion. The smoothing
+    coefficients SFA (0.75) and SFB (0.25) weight the previous angle
+    vs. the new target angle.
+
+    Args:
+        target_angle: Desired servo angle in degrees (0-180), or None to skip update.
+    """
     global smoothed_angle
     if target_angle is not None:
         # exponential smoothing
@@ -61,10 +91,32 @@ def set_motor(target_angle):
 
 
 def centroid_to_angle(x):
+    """Convert image x-coordinate to servo angle.
+
+    Maps camera x-coordinate (0-240 pixels) to servo angle (0-180 degrees).
+    The center of the image (120 pixels) maps to 90 degrees (servo center).
+
+    Args:
+        x: X-coordinate in pixels (0-240).
+
+    Returns:
+        Servo angle in degrees (0-180).
+    """
     return 90 + (x - HALF_IMAGE_WIDTH) * PIXEL_SCALE
 
 
 def get_best_box_angle(boxes):
+    """Select the best detection box and convert to servo angle.
+
+    Chooses the widest detection box (assumed to be the nearest person)
+    and returns the servo angle to center on it.
+
+    Args:
+        boxes: List of Box objects from AI inference.
+
+    Returns:
+        Servo angle in degrees, or None if no boxes detected.
+    """
     if not boxes or len(boxes) == 0:
         return None
     # Choose the box with the best score

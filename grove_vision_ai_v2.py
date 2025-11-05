@@ -112,6 +112,14 @@ class DecodeError(ValueError):
 
 
 class Perf:
+    """Performance metrics from model inference.
+
+    Attributes:
+        preprocess: Preprocessing time in milliseconds.
+        inference: Inference time in milliseconds.
+        postprocess: Postprocessing time in milliseconds.
+    """
+
     def __init__(self, preprocess=0, inference=0, postprocess=0):
         self.preprocess = preprocess
         self.inference = inference
@@ -122,6 +130,19 @@ class Perf:
 
 
 class Box:
+    """Bounding box detection result from object detection models.
+
+    The box is represented with center coordinates (x, y) and dimensions (w, h).
+
+    Attributes:
+        x: X-coordinate of box center in pixels (0-240 for default camera resolution).
+        y: Y-coordinate of box center in pixels (0-240 for default camera resolution).
+        w: Width of box in pixels.
+        h: Height of box in pixels.
+        score: Confidence score (0-100).
+        target: Target class index.
+    """
+
     def __init__(self, x, y, w, h, score, target):
         self.x = x
         self.y = y
@@ -135,22 +156,33 @@ class Box:
 
     @property
     def left(self):
+        """Left edge x-coordinate of the box."""
         return self.x - self.w / 2
 
     @property
     def right(self):
+        """Right edge x-coordinate of the box."""
         return self.x + self.w / 2
 
     @property
     def top(self):
+        """Top edge y-coordinate of the box."""
         return self.y - self.h / 2
 
     @property
     def bottom(self):
+        """Bottom edge y-coordinate of the box."""
         return self.y + self.h / 2
 
 
 class Class:
+    """Classification result from image classification models.
+
+    Attributes:
+        score: Confidence score (0-100).
+        target: Target class index.
+    """
+
     def __init__(self, score, target):
         self.score = score
         self.target = target
@@ -160,6 +192,15 @@ class Class:
 
 
 class Point:
+    """Point detection result, used for landmarks or keypoint detection.
+
+    Attributes:
+        x: X-coordinate in pixels.
+        y: Y-coordinate in pixels.
+        score: Confidence score (0-100).
+        target: Target point index.
+    """
+
     def __init__(self, x, y, score, target):
         self.x = x
         self.y = y
@@ -171,6 +212,15 @@ class Point:
 
 
 class Keypoint:
+    """Keypoint detection result combining a bounding box with multiple points.
+
+    Used for pose estimation and similar tasks where objects have multiple landmarks.
+
+    Attributes:
+        box: Bounding box containing the detected object.
+        points: List of Point objects representing keypoints/landmarks.
+    """
+
     def __init__(self, box: Box, points: list[Point]):
         self.box = box
         self.points = points
@@ -180,12 +230,65 @@ class Keypoint:
 
 
 class Image:
+    """JPEG image data decoded from base64.
+
+    Attributes:
+        data: Raw JPEG image bytes.
+    """
+
     def __init__(self, base64):
+        """Initialize Image from base64-encoded string.
+
+        Args:
+            base64: Base64-encoded JPEG image data from the AI board.
+        """
         self.data = binascii.a2b_base64(base64)
 
 
 class ATDevice:
-    def __init__(self, uart_tx, uart_rx, uart_bufsize=1024, bufsize=8192):
+    """Main interface to the Grove Vision AI V2 board via UART AT commands.
+
+    This class handles communication with the Grove Vision AI V2 board using
+    the AT command protocol over UART at 921600 baud. It provides methods for
+    running inference, capturing images, and querying device information.
+
+    Parameters:
+        uart: UART bus object for communication.
+        response: Last JSON response received from the device.
+        debug: Enable debug output for commands and responses.
+        perf: Performance metrics from last inference (Perf object).
+        boxes: List of Box objects from last detection inference.
+        classes: List of Class objects from last classification inference.
+        keypoints: List of Keypoint objects from last keypoint inference.
+        points: List of Point objects from last point inference.
+        image: Image object from last SAMPLE command (if requested).
+        response_bufsize: Size of the response buffer in bytes.
+
+    Example:
+        >>> import board
+        >>> from grove_vision_ai_v2 import ATDevice, CMD_OK
+        >>> ai = ATDevice(board.TX, board.RX)
+        >>> if ai.invoke(1, True, True) == CMD_OK:
+        ...     print(f"Detected {len(ai.boxes)} objects")
+    """
+
+    def __init__(self, uart_tx, uart_rx, uart_bufsize=1024, bufsize=1024):
+        """Initialize communication with the Grove Vision AI V2 board.
+
+        Args:
+            uart_tx: TX pin for UART communication.
+            uart_rx: RX pin for UART communication.
+            uart_bufsize: Size of UART receiver buffer in bytes. Default 1024.
+                          Increase if bytes are being lost.
+            bufsize: Size of response buffer in bytes for JSON parsing. Default 1024.
+                     Increase if responses are being truncated.
+        
+        Note:
+            Even with adequate buffer sizes,
+            using `invoke()` or `sample_image()` to capture images runs
+            the risk of data loss, and you may end up with broken JPEG images.
+            This is especially likely with an active USB connection.
+        """
         gc.collect()
         uart = busio.UART(
             uart_tx,
@@ -196,10 +299,11 @@ class ATDevice:
         )
         self.uart = uart
         uart.reset_input_buffer()
+        gc.collect()
         self._response_buffer = bytearray(bufsize)
+        self._mv = memoryview(self._response_buffer)
         self._response = None
         self._remaining_bytes = None
-        self._mv = memoryview(self._response_buffer)
         self._debug = False
         self._perf = Perf()
         self._boxes = []
@@ -277,7 +381,16 @@ class ATDevice:
 
     def _fetch_response(self, timeout):
         """Receive and return the next full JSON response as a string.
-        On timeout, return None."""
+
+        Handles buffering of multiple JSON responses and caches remaining data
+        for subsequent calls.
+
+        Args:
+            timeout: Maximum time to wait for response in seconds.
+
+        Returns:
+            JSON response string, or None on timeout.
+        """
         t_start = now()
         if self._remaining_bytes:
             response = str(
@@ -324,7 +437,14 @@ class ATDevice:
         return None
 
     def _parse_event(self, response: dict):
-        """Handle a JSON event response (type=CMD_TYPE_EVENT)."""
+        """Handle a JSON event response (type=CMD_TYPE_EVENT).
+
+        Extracts inference results (boxes, classes, points, keypoints, images)
+        from INVOKE and SAMPLE events and updates instance attributes.
+
+        Args:
+            response: Parsed JSON response dictionary.
+        """
         if response["name"] not in (CMD_AT_INVOKE, CMD_AT_SAMPLE):
             return
 
@@ -406,19 +526,60 @@ class ATDevice:
             raise DecodeError(f"Failed to decode JSON response {response}")
 
     def invoke(self, times: int, diffonly: bool, resultonly: bool, timeout=0.1):
+        """Run inference on the loaded model.
+
+        Results are stored in instance attributes (boxes, classes, points, keypoints, perf).
+
+        Args:
+            times: Number of times to run inference (usually 1).
+            diffonly: If True, only return results that differ from previous inference.
+            resultonly: If True, only return inference results without image data.
+            timeout: Maximum time to wait for results in seconds. Default 0.1.
+
+        Returns:
+            CMD_OK (0) on success, or error code (CMD_ETIMEDOUT, etc.).
+
+        Example:
+            >>> if ai.invoke(1, True, True) == CMD_OK:
+            ...     for box in ai.boxes:
+            ...         print(f"Detected object at ({box.x}, {box.y})")
+        """
         self._send_command(f"{CMD_AT_INVOKE}={times},{int(diffonly)},{int(resultonly)}")
         if (err := self._wait(CMD_TYPE_RESPONSE, CMD_AT_INVOKE, 0.05)) == CMD_OK:
             return self._wait(CMD_TYPE_EVENT, CMD_AT_INVOKE, timeout)
         return err
 
     def sample_image(self, times: int = 1, timeout=0.1):
+        """Capture an image from the camera without running inference.
+
+        The image data is stored in the `image` attribute as an Image object.
+
+        Args:
+            times: Number of images to capture (usually 1).
+            timeout: Maximum time to wait for image capture in seconds. Default 0.1.
+
+        Returns:
+            CMD_OK (0) on success, or error code (CMD_ETIMEDOUT, etc.).
+
+        Example:
+            >>> if ai.sample_image() == CMD_OK and ai.image:
+            ...     with open('capture.jpg', 'wb') as f:
+            ...         f.write(ai.image.data)
+        """
         self._send_command(f"{CMD_AT_SAMPLE}={times}")
         if (err := self._wait(CMD_TYPE_RESPONSE, CMD_AT_SAMPLE, 0.05)) == CMD_OK:
             return self._wait(CMD_TYPE_EVENT, CMD_AT_SAMPLE, timeout)
         return err
 
-
     def id(self, cache=True):
+        """Get the device ID.
+
+        Args:
+            cache: If True, return cached value if available. Default True.
+
+        Returns:
+            Device ID string, or None on error.
+        """
         if cache and self._id:
             return self._id
 
@@ -429,6 +590,14 @@ class ATDevice:
         return None
 
     def name(self, cache=True):
+        """Get the device name.
+
+        Args:
+            cache: If True, return cached value if available. Default True.
+
+        Returns:
+            Device name string, or None on error.
+        """
         if cache and self._name:
             return self._name
 
@@ -439,6 +608,14 @@ class ATDevice:
         return None
 
     def version(self, cache=True):
+        """Get the firmware version information.
+
+        Args:
+            cache: If True, return cached value if available. Default True.
+
+        Returns:
+            Dictionary with version info including 'at_api', 'software', etc., or None on error.
+        """
         if cache and self._version:
             return self._version
 
@@ -449,12 +626,27 @@ class ATDevice:
         return None
 
     def at_api(self):
+        """Get the AT API version string.
+
+        Returns:
+            AT API version string (e.g., "v0"), or None on error.
+        """
         ver = self.version()
         if ver:
             return ver["at_api"]
         return None
 
     def info(self, cache=True):
+        """Get the model information as a base64-encoded string.
+
+        Use model_info() to get the decoded model metadata.
+
+        Args:
+            cache: If True, return cached value if available. Default True.
+
+        Returns:
+            Base64-encoded model info string, or None on error.
+        """
         if cache and self._info:
             return self._info
 
@@ -465,28 +657,33 @@ class ATDevice:
         return None
 
     def model_info(self) -> dict or None:
-        """For a model loaded from the Sensecraft web site, return a dict that looks like this:
-        ```
-        {
-            "author": "SenseCraft AI",
-            "model_id": "60086",
-            "model_name": "Person Detection--Swift YOLO",
-            "model_ai_framwork": "6",
-            "checksum": "f2b99229ba108c82de9379c4b6ad6354",
-            "arguments": {
-                "createdAt": 1705306231,
-                "size": 1644.08,
-                "task": "detect",
-                "conf": 50,
-                "iou": 45,
-                "updatedAt": 1747633412,
-                "icon": "https://sensecraft-statics.oss-accelerate.aliyuncs.com/refer/pic/1705306138275_iykYXV_detection_person.png",
-                "url": "https://sensecraft-statics.oss-accelerate.aliyuncs.com/refer/model/1705306215159_jVQf4u_swift_yolo_nano_person_192_int8_vela(2).tflite",
-            },
-            "classes": ["person"],
-            "version": "1.0.0",
-        }
-        ```
+        """
+        For a model loaded from the Sensecraft web site, return a dict describing the model.
+        
+        Example:
+
+        .. code-block:: python
+
+            {
+                "author": "SenseCraft AI",
+                "model_id": "60086",
+                "model_name": "Person Detection--Swift YOLO",
+                "model_ai_framwork": "6",
+                "checksum": "f2b99229ba108c82de9379c4b6ad6354",
+                "arguments": {
+                    "createdAt": 1705306231,
+                    "size": 1644.08,
+                    "task": "detect",
+                    "conf": 50,
+                    "iou": 45,
+                    "updatedAt": 1747633412,
+                    "icon": "https://sensecraft-statics.oss-accelerate.aliyuncs.com/refer/pic/1705306138275_iykYXV_detection_person.png",
+                    "url": "https://sensecraft-statics.oss-accelerate.aliyuncs.com/refer/model/1705306215159_jVQf4u_swift_yolo_nano_person_192_int8_vela(2).tflite",
+                },
+                "classes": ["person"],
+                "version": "1.0.0",
+            }
+
         """
         inf = self.info()
         if inf is None:
@@ -497,19 +694,42 @@ class ATDevice:
             return inf
 
     def clean_actions(self):
+        """Clear all configured actions.
+
+        Returns:
+            CMD_OK (0) on success, or error code.
+        """
         self._send_command(f'{CMD_AT_ACTION}=""')
         return self._wait(CMD_TYPE_RESPONSE, CMD_AT_ACTION)
 
     def save_jpeg(self):
-        """If you have an SD card mounted on the AI board, save the image.
-        Turn this off using clean_actions()."""
+        """Configure the board to save captured images to SD card.
+
+        Requires an SD card to be mounted on the AI board. Use clean_actions()
+        to disable this feature.
+
+        Returns:
+            CMD_OK (0) on success, or error code.
+        """
         self._send_command(f'{CMD_AT_ACTION}="{CMD_AT_SAVE_JPEG}"')
         return self._wait(CMD_TYPE_RESPONSE, CMD_AT_ACTION)
 
     def perform_command(self, cmd: str, tag: str = None):
-        """Perform one of the CMD_AT_xxx commands.
-        The response will be available in `self.response`.
-        Return CMD_OK or CMD_ETIMEDOUT."""
+        """Perform a raw AT command.
+
+        The response will be available in self.response.
+
+        Args:
+            cmd: Command string (e.g., "MODEL=1", "MODELS?").
+            tag: Optional tag for the command. Default None.
+
+        Returns:
+            CMD_OK (0) on success, CMD_ETIMEDOUT on timeout, or other error code.
+
+        Example:
+            >>> ai.perform_command("MODEL=1")  # Switch to model 1
+            >>> print(ai.response)
+        """
         retries = 0
         while retries < 2:
             self._send_command(cmd, tag)

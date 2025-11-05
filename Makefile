@@ -12,6 +12,9 @@ compile: $(COMPILED)
 sync: compile
 	cp $(COMPILED) $(CPY_DRIVE)
 
+view-docs: docs
+	open $(HERE)/docs/_build/html/index.html
+
 %.mpy: %.py
 	$(MPY_CROSS) $<
 
