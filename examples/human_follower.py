@@ -15,6 +15,8 @@ import pwmio
 from adafruit_motor import servo
 from micropython import const
 from grove_vision_ai_v2 import ATDevice, CMD_OK
+from digitalio import DigitalInOut
+
 
 # Configuration
 # Scaling (pixels to degrees)
@@ -26,6 +28,7 @@ HALF_IMAGE_WIDTH = const(120)
 TX_PIN = board.TX
 RX_PIN = board.RX
 SERVO_PWM_PIN = board.D0
+LED_PIN = board.LED_BLUE
 
 # Smoothing params
 SFA = const(0.75)
@@ -37,10 +40,16 @@ now = time.monotonic  # cached
 ai = ATDevice(TX_PIN, RX_PIN)
 pwm = pwmio.PWMOut(SERVO_PWM_PIN, duty_cycle=2**15, frequency=50)
 motor = servo.Servo(pwm)
+led = DigitalInOut(LED_PIN)
+led.switch_to_output(value=True)
+
 target_angle = 90
 motor.angle = target_angle  # [0..180]
 smoothed_angle = target_angle
 
+
+def enable_led(value):
+    led.value = not bool(value)
 
 def set_motor(target_angle):
     global smoothed_angle
@@ -78,12 +87,14 @@ while True:
         started = now()
         err = ai.invoke(1, True, True)
         duration = int((now() - started) * 1000)
+        enable_led(False)
         if err != CMD_OK:
             print(f"{duration} No response")
             set_motor(target_angle)
             continue
         best_angle = get_best_box_angle(ai.boxes)
         if best_angle is not None:
+            enable_led(True)
             target_angle = best_angle
             print(f"({duration} Boxes: {ai.boxes}, Perf: {ai.perf}")
             set_motor(best_angle)

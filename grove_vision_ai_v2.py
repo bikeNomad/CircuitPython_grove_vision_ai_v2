@@ -9,6 +9,8 @@ Circuitpython Support for using the Grove Vision AI V2 with pre-built models.
 
 Communication with the Grove Vision AI V2 board is over a UART connection.
 
+Written for AT API "v0", softrware version "2025.01.02"
+
 * Author(s): Ned Konz
 
 Implementation Notes
@@ -34,7 +36,7 @@ Implementation Notes
 **References**
 
 * AT Command reference:
-  https://github.com/Seeed-Studio/SSCMA-Micro/blob/main/docs/protocol/at-protocol-en_US.md
+  https://github.com/Seeed-Studio/SSCMA-Micro/blob/1.0.x/docs/protocol/at_protocol.md
 * Useful links: https://github.com/djairjr/Seeed-Grove_AI_V2_Dev
 * Schematic:
   https://files.seeedstudio.com/wiki/grove-vision-ai-v2/Grove_Vision_AI_Module_V2_Circuit_Diagram.pdf
@@ -53,36 +55,42 @@ from micropython import const
 now = time.monotonic
 
 # AT commands from the Arduino library
-# NOTE: most are untetested and may not work.
+# Tested
 CMD_AT_ACTION = const("ACTION")
-CMD_AT_ALGOS = const("ALGOS")
+CMD_AT_ACTION_STATUS = const("ACTION?")
+CMD_AT_ALGOS = const("ALGOS?")
 CMD_AT_BREAK = const("BREAK")
 CMD_AT_ID = const("ID?")
 CMD_AT_INFO = const("INFO?")
 CMD_AT_INVOKE = const("INVOKE")
-CMD_AT_LED = const("led")
-CMD_AT_MODEL = const("MODEL")
-CMD_AT_MODELS = const("MODELS")
+CMD_AT_MODEL = const("MODEL")  # e.g. MODEL=1
+CMD_AT_MODELS = const("MODELS?")
+CMD_AT_MODEL_STATUS = const("MODEL?")
 CMD_AT_NAME = const("NAME?")
 CMD_AT_RESET = const("RST")
 CMD_AT_SAMPLE = const("SAMPLE")
-CMD_AT_SAVE_JPEG = const("save_jpeg()")
-CMD_AT_SENSORS = const("SENSORS")
-CMD_AT_STATS = const("STAT")
-CMD_AT_TIOU = const("TIOU")
-CMD_AT_TSCORE = const("TSCORE")
+CMD_AT_SAMPLE_STATUS = const("SAMPLE?")
+CMD_AT_SAVE_JPEG = const("save_jpeg()")  # not tested with SD card
+CMD_AT_SENSOR = const("SENSOR")
+CMD_AT_SENSORS = const("SENSORS?")
+CMD_AT_SENSOR_STATUS = const("SENSOR?")
+CMD_AT_STATUS = const("STAT?")
 CMD_AT_VERSION = const("VER?")
 
+# Recognized but don't know args yet
+CMD_AT_LED = const("led")
+
+# 'name' values in event responses
 EVENT_INVOKE = const("INVOKE")
 EVENT_SAMPLE = const("SAMPLE")
-EVENT_WIFI = const("WIFI")
-EVENT_MQTT = const("MQTT")
 EVENT_SUPERVISOR = const("SUPERVISOR")
 
+# 'type' values in responses
 CMD_TYPE_RESPONSE = const(0)
 CMD_TYPE_EVENT = const(1)
 CMD_TYPE_LOG = const(2)
 
+# 'code' values in responses
 CMD_OK = const(0)
 CMD_AGAIN = const(1)
 CMD_ELOG = const(2)
@@ -97,6 +105,10 @@ CMD_EUNKNOWN = const(10)
 
 RESPONSE_PREFIX = const(b"\r{")
 RESPONSE_SUFFIX = const(b"}\n")
+
+
+class DecodeError(ValueError):
+    pass
 
 
 class Perf:
@@ -119,9 +131,7 @@ class Box:
         self.target = target
 
     def __repr__(self):
-        return (
-            f"Box(x={self.x}, y={self.y}, w={self.w}, h={self.h}, score={self.score}, target={self.target})"
-        )
+        return f"Box(x={self.x}, y={self.y}, w={self.w}, h={self.h}, score={self.score}, target={self.target})"
 
     @property
     def left(self):
@@ -157,9 +167,7 @@ class Point:
         self.target = target
 
     def __repr__(self):
-        return (
-            f"Point(x={self.x}, y={self.y}, score={self.score}, target={self.target})"
-        )
+        return f"Point(x={self.x}, y={self.y}, score={self.score}, target={self.target})"
 
 
 class Keypoint:
@@ -202,6 +210,8 @@ class ATDevice:
         self._id = None
         self._name = None
         self._info = None
+        self._last_full_command = None
+        self._version = None
 
     @property
     def response_bufsize(self):
@@ -214,6 +224,10 @@ class ATDevice:
         gc.collect()
         self._response_buffer = bytearray(value)
         self._mv = memoryview(self._response_buffer)
+
+    @property
+    def response(self):
+        return self._response
 
     @property
     def debug(self):
@@ -254,7 +268,12 @@ class ATDevice:
             full_command = f"AT+{command}\r\n"
         if self.debug:
             print(f"=> {full_command}")
-        self.uart.write(full_command.encode("utf-8"))
+        full_command = full_command.encode("utf-8")
+        self._last_full_command = full_command
+        self.uart.write(full_command)
+
+    def _retry_command(self):
+        self.uart.write(self._last_full_command)
 
     def _fetch_response(self, timeout):
         """Receive and return the next full JSON response as a string.
@@ -291,9 +310,7 @@ class ATDevice:
                 else:
                     self._remaining_bytes = None
                 elapsed = (now() - t_start) * 1000
-                wait_for_first = (
-                    (first_byte_time - t_start) * 1000 if first_byte_time else 0
-                )
+                wait_for_first = (first_byte_time - t_start) * 1000 if first_byte_time else 0
                 if self.debug:
                     print(f"<=(NEW) {response}")
                     print(
@@ -308,7 +325,7 @@ class ATDevice:
 
     def _parse_event(self, response: dict):
         """Handle a JSON event response (type=CMD_TYPE_EVENT)."""
-        if response["name"] != CMD_AT_INVOKE:
+        if response["name"] not in (CMD_AT_INVOKE, CMD_AT_SAMPLE):
             return
 
         data = response.get("data", None)
@@ -350,6 +367,7 @@ class ATDevice:
 
     def _parse_log(self, response: dict):
         """Handle a log JSON response (type=CMD_TYPE_LOG)."""
+        # print(response)
         pass
 
     def _wait(self, type: int, cmd: str, timeout: float = 1.0):
@@ -359,16 +377,17 @@ class ATDevice:
             if resp is None:
                 continue
             response = self._response = self._parse_json(resp)
-            if response is None:
-                continue
 
+            retval = response["code"]
             if response["type"] == CMD_TYPE_EVENT:
                 self._parse_event(response)
             elif response["type"] == CMD_TYPE_LOG:
                 self._parse_log(response)
+                return retval
 
-            retval = response["code"]
-            if response["type"] == type and response["name"] == cmd:
+            # Get the command up to the first "="
+            base_cmd = cmd.split("=")[0]
+            if response["type"] == type and response["name"] == base_cmd:
                 return retval
             # else discard this reply
 
@@ -384,15 +403,20 @@ class ATDevice:
         try:
             return json.loads(response)
         except ValueError:
-            print(f"Failed to decode JSON response {response}")
-            return None
+            raise DecodeError(f"Failed to decode JSON response {response}")
 
     def invoke(self, times: int, diffonly: bool, resultonly: bool, timeout=0.1):
         self._send_command(f"{CMD_AT_INVOKE}={times},{int(diffonly)},{int(resultonly)}")
-        if self._wait(CMD_TYPE_RESPONSE, CMD_AT_INVOKE, 0.05) == CMD_OK:
-            if self._wait(CMD_TYPE_EVENT, CMD_AT_INVOKE, timeout) == CMD_OK:
-                return CMD_OK
-        return CMD_ETIMEDOUT
+        if (err := self._wait(CMD_TYPE_RESPONSE, CMD_AT_INVOKE, 0.05)) == CMD_OK:
+            return self._wait(CMD_TYPE_EVENT, CMD_AT_INVOKE, timeout)
+        return err
+
+    def sample_image(self, times: int = 1, timeout=0.1):
+        self._send_command(f"{CMD_AT_SAMPLE}={times}")
+        if (err := self._wait(CMD_TYPE_RESPONSE, CMD_AT_SAMPLE, 0.05)) == CMD_OK:
+            return self._wait(CMD_TYPE_EVENT, CMD_AT_SAMPLE, timeout)
+        return err
+
 
     def id(self, cache=True):
         if cache and self._id:
@@ -414,6 +438,22 @@ class ATDevice:
             return self._name
         return None
 
+    def version(self, cache=True):
+        if cache and self._version:
+            return self._version
+
+        self._send_command(CMD_AT_VERSION)
+        if self._wait(CMD_TYPE_RESPONSE, CMD_AT_VERSION) == CMD_OK:
+            self._version = self.response["data"]
+            return self._version
+        return None
+
+    def at_api(self):
+        ver = self.version()
+        if ver:
+            return ver["at_api"]
+        return None
+
     def info(self, cache=True):
         if cache and self._info:
             return self._info
@@ -424,27 +464,64 @@ class ATDevice:
             return self._info
         return None
 
+    def model_info(self) -> dict or None:
+        """For a model loaded from the Sensecraft web site, return a dict that looks like this:
+        ```
+        {
+            "author": "SenseCraft AI",
+            "model_id": "60086",
+            "model_name": "Person Detection--Swift YOLO",
+            "model_ai_framwork": "6",
+            "checksum": "f2b99229ba108c82de9379c4b6ad6354",
+            "arguments": {
+                "createdAt": 1705306231,
+                "size": 1644.08,
+                "task": "detect",
+                "conf": 50,
+                "iou": 45,
+                "updatedAt": 1747633412,
+                "icon": "https://sensecraft-statics.oss-accelerate.aliyuncs.com/refer/pic/1705306138275_iykYXV_detection_person.png",
+                "url": "https://sensecraft-statics.oss-accelerate.aliyuncs.com/refer/model/1705306215159_jVQf4u_swift_yolo_nano_person_192_int8_vela(2).tflite",
+            },
+            "classes": ["person"],
+            "version": "1.0.0",
+        }
+        ```
+        """
+        inf = self.info()
+        if inf is None:
+            return None
+        try:
+            return json.loads(binascii.a2b_base64(inf))
+        except ValueError:
+            return inf
+
     def clean_actions(self):
         self._send_command(f'{CMD_AT_ACTION}=""')
-        if self._wait(CMD_TYPE_RESPONSE, CMD_AT_ACTION) == CMD_OK:
-            return CMD_OK
-        return CMD_ETIMEDOUT
+        return self._wait(CMD_TYPE_RESPONSE, CMD_AT_ACTION)
 
     def save_jpeg(self):
+        """If you have an SD card mounted on the AI board, save the image.
+        Turn this off using clean_actions()."""
         self._send_command(f'{CMD_AT_ACTION}="{CMD_AT_SAVE_JPEG}"')
-        if self._wait(CMD_TYPE_RESPONSE, CMD_AT_ACTION) == CMD_OK:
-            return CMD_OK
-        return CMD_ETIMEDOUT
+        return self._wait(CMD_TYPE_RESPONSE, CMD_AT_ACTION)
 
     def perform_command(self, cmd: str, tag: str = None):
         """Perform one of the CMD_AT_xxx commands.
+        The response will be available in `self.response`.
         Return CMD_OK or CMD_ETIMEDOUT."""
-        self._send_command(cmd, tag)
-        if self._wait(CMD_TYPE_RESPONSE, CMD_AT_ACTION) == CMD_OK:
-            return CMD_OK
+        retries = 0
+        while retries < 2:
+            self._send_command(cmd, tag)
+            try:
+                return self._wait(CMD_TYPE_RESPONSE, cmd)
+            # Retry on decode error
+            except DecodeError:
+                retries += 1
+                continue
         return CMD_ETIMEDOUT
 
 
 __name__ = "grove_vision_ai_v2"
-__version__ = "0.0.0+auto.0"
+__version__ = "0.1.0"
 __repo__ = "https://github.com/bikeNomad/CircuitPython_grove_vision_ai_v2.git"
