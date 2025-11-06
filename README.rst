@@ -24,6 +24,13 @@ Introduction
 
 CircuitPython support for Seeed Studio's Grove Vision AI V2 board
 
+* Seeed Studio Grove Vision AI V2 board:
+  https://www.seeedstudio.com/Grove-Vision-AI-Module-V2-p-5851.html
+
+* OV5647 Camera supported by the Grove Vision AI V2 board
+
+* Sensecraft AI (web based):
+  https://sensecraft.seeed.cc/ai/home
 
 Dependencies
 =============
