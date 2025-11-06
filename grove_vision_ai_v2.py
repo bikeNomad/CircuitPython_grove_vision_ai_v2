@@ -146,7 +146,9 @@ class Box:
         target: Target class index.
     """
 
-    def __init__(self, x: int, y: int, w: int, h: int, score: int, target: int) -> None:
+    def __init__(  # noqa: PLR0913, PLR0917
+        self, x: int, y: int, w: int, h: int, score: int, target: int
+    ) -> None:
         self.x = x
         self.y = y
         self.w = w
@@ -155,7 +157,10 @@ class Box:
         self.target = target
 
     def __repr__(self) -> str:
-        return f"Box(x={self.x}, y={self.y}, w={self.w}, h={self.h}, score={self.score}, target={self.target})"
+        return (
+            f"Box(x={self.x}, y={self.y}, w={self.w}, h={self.h}, "
+            f"score={self.score}, target={self.target})"
+        )
 
     @property
     def left(self) -> float:
@@ -248,7 +253,7 @@ class Image:
         self.data: bytes = binascii.a2b_base64(base64)
 
 
-class ATDevice:
+class ATDevice:  # noqa: PLR0904
     """Main interface to the Grove Vision AI V2 board via UART AT commands.
 
     This class handles communication with the Grove Vision AI V2 board using
@@ -430,14 +435,61 @@ class ATDevice:
                 if self.debug:
                     print(f"<=(NEW) {response}")
                     print(
-                        f"[TIMING] _fetch_response: waited {wait_for_first:.1f}ms for first byte, total {elapsed:.1f}ms, {poll_count} polls, {index} bytes"
+                        f"[TIMING] _fetch_response: waited {wait_for_first:.1f}ms for first byte, "
+                        f"total {elapsed:.1f}ms, {poll_count} polls, {index} bytes"
                     )
                 return response
         if self.debug:
             print(
-                f"[TIMEOUT] _fetch_response timed out after {(now() - t_start) * 1000:.1f}ms, {poll_count} polls"
+                f"[TIMEOUT] _fetch_response timed out after {(now() - t_start) * 1000:.1f}ms, "
+                f"{poll_count} polls"
             )
         return None
+
+    def _parse_perf(self, data: dict) -> None:
+        """Parse performance metrics from event data."""
+        if (perf := data.get("perf", None)) and isinstance(perf, list):
+            self._perf = Perf(*perf)
+        else:
+            self._perf = Perf()
+
+    def _parse_boxes(self, data: dict) -> None:
+        """Parse bounding boxes from event data."""
+        if (boxes := data.get("boxes", None)) and isinstance(boxes, list):
+            self._boxes = [Box(*box) for box in boxes]
+        else:
+            self._boxes.clear()
+
+    def _parse_classes(self, data: dict) -> None:
+        """Parse classification results from event data."""
+        if (classes := data.get("classes", None)) and isinstance(classes, list):
+            self._classes = [Class(*cls) for cls in classes]
+        else:
+            self._classes.clear()
+
+    def _parse_points(self, data: dict) -> None:
+        """Parse point detections from event data."""
+        if (points := data.get("points", None)) and isinstance(points, list):
+            self._points = [Point(*point) for point in points]
+        else:
+            self._points.clear()
+
+    def _parse_keypoints(self, data: dict) -> None:
+        """Parse keypoint detections from event data."""
+        self._keypoints.clear()
+        if (keypoints := data.get("keypoints", None)) and isinstance(keypoints, list):
+            self._keypoints = []
+            for kp in keypoints:
+                box = Box(*kp[0])
+                points = [Point(*point) for point in kp[1]]
+                self._keypoints.append(Keypoint(box, points))
+
+    def _parse_image(self, data: dict) -> None:
+        """Parse image data from event data."""
+        if (image := data.get("image", None)) and isinstance(image, str):
+            self._image = Image(image)
+        else:
+            self._image = None
 
     def _parse_event(self, response: dict) -> None:
         """Handle a JSON event response (type=CMD_TYPE_EVENT).
@@ -448,45 +500,19 @@ class ATDevice:
         Args:
             response: Parsed JSON response dictionary.
         """
-        if response["name"] not in (CMD_AT_INVOKE, CMD_AT_SAMPLE):
+        if response["name"] not in {CMD_AT_INVOKE, CMD_AT_SAMPLE}:
             return
 
         data = response.get("data", None)
         if data is None:
             return
 
-        if (perf := data.get("perf", None)) and isinstance(perf, list):
-            self._perf = Perf(*perf)
-        else:
-            self._perf = Perf()
-
-        if (boxes := data.get("boxes", None)) and isinstance(boxes, list):
-            self._boxes = [Box(*box) for box in boxes]
-        else:
-            self._boxes.clear()
-
-        if (classes := data.get("classes", None)) and isinstance(classes, list):
-            self._classes = [Class(*cls) for cls in classes]
-        else:
-            self._classes.clear()
-
-        if (points := data.get("points", None)) and isinstance(points, list):
-            self._points = [Point(*point) for point in points]
-        else:
-            self._points.clear()
-
-        self._keypoints.clear()
-        if (keypoints := data.get("keypoints", None)) and isinstance(keypoints, list):
-            self._keypoints = []
-            for kp in keypoints:
-                box = Box(*kp[0])
-                points = [Point(*point) for point in kp[1]]
-                self._keypoints.append(Keypoint(box, points))
-
-        if (image := data.get("image", None)) and isinstance(image, str):
-            self._image = Image(image)
-        else:
-            self._image = None
+        self._parse_perf(data)
+        self._parse_boxes(data)
+        self._parse_classes(data)
+        self._parse_points(data)
+        self._parse_keypoints(data)
+        self._parse_image(data)
 
     def _parse_log(self, response: dict) -> None:
         """Handle a log JSON response (type=CMD_TYPE_LOG)."""
@@ -524,7 +550,8 @@ class ATDevice:
                 resp += data.decode("utf-8")
         return resp
 
-    def _parse_json(self, response: str) -> dict:
+    @staticmethod
+    def _parse_json(response: str) -> dict:
         try:
             return json.loads(response)
         except ValueError as exc:

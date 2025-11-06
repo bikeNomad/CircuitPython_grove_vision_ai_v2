@@ -47,10 +47,7 @@ RX_PIN = board.RX
 SERVO_PWM_PIN = board.D0
 LED_PIN = board.LED_BLUE
 
-# Smoothing params
-SFA = const(0.75)
-SFB = const(0.25)
-assert 1.0 - (SFA + SFB) < 0.0001
+SMOOTH_ALPHA = const(0.25)
 
 # Globals
 now = time.monotonic  # cached
@@ -62,7 +59,34 @@ led.switch_to_output(value=True)
 
 target_angle = 90
 motor.angle = target_angle  # [0..180]
-smoothed_angle = target_angle
+smoothed_angle = Smoother(target_angle, SMOOTH_ALPHA)
+
+
+class Smoother:
+    """A simple exponential smoother for numerical values.
+
+    Attributes:
+        value: The current smoothed value.
+        alpha: The smoothing factor (0.0 to 1.0). Higher alpha means less smoothing.
+    """
+
+    def __init__(self, initial_value: float, alpha: float) -> None:
+        if not 0.0 <= alpha <= 1.0:
+            raise ValueError("Alpha must be between 0.0 and 1.0")
+        self.value = initial_value
+        self.alpha = alpha
+
+    def update(self, new_value: float) -> float:
+        """Update the smoothed value with a new input.
+
+        Args:
+            new_value: The new raw value to incorporate into the smoothing.
+
+        Returns:
+            The newly smoothed value.
+        """
+        self.value = self.alpha * new_value + (1.0 - self.alpha) * self.value
+        return self.value
 
 
 def enable_led(value: bool) -> None:
@@ -78,19 +102,11 @@ def enable_led(value: bool) -> None:
 def set_motor(target_angle: float | None) -> None:
     """Set the servo motor angle with exponential smoothing.
 
-    Applies exponential smoothing to prevent jerky motion. The smoothing
-    coefficients SFA (0.75) and SFB (0.25) weight the previous angle
-    vs. the new target angle.
-
     Args:
         target_angle: Desired servo angle in degrees (0-180), or None to skip update.
     """
-    global smoothed_angle
     if target_angle is not None:
-        # exponential smoothing
-        smoothed_angle = smoothed_angle * SFA + target_angle * SFB
-        motor.angle = smoothed_angle
-    # print(f"target: {target_angle}, new: {smoothed_angle}")  # DEBUG
+        motor.angle = smoothed_angle.update(target_angle)
 
 
 def centroid_to_angle(x: int) -> float:
