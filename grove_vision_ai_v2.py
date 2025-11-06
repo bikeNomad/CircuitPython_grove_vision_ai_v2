@@ -118,6 +118,7 @@ _CODE_DECODE_TABLE = {
     10: "EUNKNOWN",
 }
 
+
 class DecodeError(ValueError):
     pass
 
