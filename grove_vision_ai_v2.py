@@ -260,17 +260,8 @@ class ATDevice:  # noqa: PLR0904
     the AT command protocol over UART at 921600 baud. It provides methods for
     running inference, capturing images, and querying device information.
 
-    Parameters:
-        uart: UART bus object for communication.
-        response: Last JSON response received from the device.
-        debug: Enable debug output for commands and responses.
-        perf: Performance metrics from last inference (Perf object).
-        boxes: List of Box objects from last detection inference.
-        classes: List of Class objects from last classification inference.
-        keypoints: List of Keypoint objects from last keypoint inference.
-        points: List of Point objects from last point inference.
-        image: Image object from last SAMPLE command (if requested).
-        response_bufsize: Size of the response buffer in bytes.
+    Attributes:
+        uart (busio.UART): UART bus object for communication.
 
     Example:
         >>> import board
@@ -327,6 +318,9 @@ class ATDevice:  # noqa: PLR0904
 
     @property
     def response_bufsize(self) -> int:
+        """Size of the response buffer in bytes.
+        Setting this to a new value re-allocates the buffer
+        and does a GC collection."""
         return len(self._response_buffer)
 
     @response_bufsize.setter
@@ -339,10 +333,12 @@ class ATDevice:  # noqa: PLR0904
 
     @property
     def response(self) -> dict | None:
+        """Last JSON response received from the device."""
         return self._response
 
     @property
     def debug(self) -> bool:
+        """Enable debug output for commands and responses."""
         return self._debug
 
     @debug.setter
@@ -351,26 +347,32 @@ class ATDevice:  # noqa: PLR0904
 
     @property
     def perf(self) -> Perf:
+        """Performance metrics from last inference (Perf object)."""
         return self._perf
 
     @property
     def boxes(self) -> list[Box]:
+        """List of Box objects from last detection inference."""
         return self._boxes
 
     @property
     def classes(self) -> list[Class]:
+        """List of Class objects from last classification inference."""
         return self._classes
 
     @property
     def keypoints(self) -> list[Keypoint]:
+        """List of Keypoint objects from last keypoint inference."""
         return self._keypoints
 
     @property
     def points(self) -> list[Point]:
+        """List of Point objects from last point inference."""
         return self._points
 
     @property
     def image(self) -> Image | None:
+        """Image object from last SAMPLE command or INVOKE command (if requested)."""
         return self._image
 
     def _send_command(self, command: str, tag: str | None = None) -> None:

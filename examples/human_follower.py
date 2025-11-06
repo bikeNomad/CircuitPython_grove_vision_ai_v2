@@ -59,7 +59,6 @@ led.switch_to_output(value=True)
 
 target_angle = 90
 motor.angle = target_angle  # [0..180]
-smoothed_angle = Smoother(target_angle, SMOOTH_ALPHA)
 
 
 class Smoother:
@@ -87,6 +86,9 @@ class Smoother:
         """
         self.value = self.alpha * new_value + (1.0 - self.alpha) * self.value
         return self.value
+
+
+smoothed_angle = Smoother(target_angle, SMOOTH_ALPHA)
 
 
 def enable_led(value: bool) -> None:
@@ -167,7 +169,7 @@ while True:
         if best_angle is not None:
             enable_led(True)
             target_angle = best_angle
-            print(f"({duration} Boxes: {ai.boxes}, Perf: {ai.perf}")
+            print(f"{duration} Boxes: {ai.boxes}, Perf: {ai.perf}")
             set_motor(best_angle)
     except ValueError as e:
         print(e)
