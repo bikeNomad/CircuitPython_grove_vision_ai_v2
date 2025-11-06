@@ -45,9 +45,9 @@ from grove_vision_ai_v2 import CMD_OK, ATDevice, Box
 
 # Configuration
 # Scaling (pixels to degrees)
-PIXEL_SCALE = -0.3
+# FOV 72 degrees over 240 pixels:
+PIXEL_SCALE = -72.0/240
 HALF_IMAGE_WIDTH = const(120)
-
 
 # Pin usage (change as necessary)
 TX_PIN = board.TX
@@ -55,7 +55,7 @@ RX_PIN = board.RX
 SERVO_PWM_PIN = board.D0
 LED_PIN = board.D1  # active low
 
-SMOOTH_ALPHA = const(0.25)
+SMOOTH_ALPHA = const(0.4)  # lower=slower
 
 # Globals
 now = time.monotonic  # cached
@@ -63,9 +63,6 @@ ai = ATDevice(TX_PIN, RX_PIN)
 pwm = pwmio.PWMOut(SERVO_PWM_PIN, duty_cycle=2**15, frequency=50)
 motor = servo.Servo(pwm)
 led = DigitalInOut(LED_PIN)
-led.switch_to_output(value=True)
-target_angle = 90
-motor.angle = target_angle  # [0..180]
 
 
 class Smoother:
@@ -95,7 +92,7 @@ class Smoother:
         return self.value
 
 
-smoothed_angle = Smoother(target_angle, SMOOTH_ALPHA)
+smoothed_angle = Smoother(90, SMOOTH_ALPHA)
 
 
 def enable_led(value: bool) -> None:
@@ -162,28 +159,35 @@ def get_best_box_angle(boxes: list[Box]) -> float | None:
 # print(f"id={ai.id()}")
 # print(f"name={ai.name()}")
 
-while True:
-    try:
-        started = now()
-        err = ai.invoke(1, True, True)
-        duration = int((now() - started) * 1000)
-        if err != CMD_OK:
-            enable_led(False)
-            print(f"{duration} No response")
-            set_motor(target_angle)
-            continue
-        best_angle = get_best_box_angle(ai.boxes)
-        if best_angle is not None:
-            enable_led(True)
-            target_angle = best_angle
-            print(f"{duration} Boxes: {ai.boxes}, Perf: {ai.perf}")
-            set_motor(best_angle)
-        else:
-            enable_led(False)
-            print(f"{duration} No boxes")
-            set_motor(target_angle)
-    except ValueError as e:
-        print(e)
-    except KeyboardInterrupt:
-        motor.angle = 90
-        break
+
+def run():
+    led.switch_to_output(value=True)
+    target_angle = motor.angle = 90
+
+    while True:
+        try:
+            started = now()
+            err = ai.invoke(1, True, True)
+            duration = int((now() - started) * 1000)
+            if err != CMD_OK:
+                enable_led(False)
+                print(f"{duration} No response")
+            else:
+                best_angle = get_best_box_angle(ai.boxes)
+                if best_angle is not None:
+                    enable_led(True)
+                    target_angle = best_angle
+                    print(f"{duration} Boxes: {ai.boxes}, Perf: {ai.perf}")
+                else:
+                    enable_led(False)
+                    print(f"{duration} No boxes")
+        except ValueError as e:
+            print(e)
+        except KeyboardInterrupt:
+            target_angle = motor.angle = 90
+            break
+
+        set_motor(target_angle)
+
+
+run()
