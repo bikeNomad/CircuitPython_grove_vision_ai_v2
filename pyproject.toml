@@ -16,7 +16,7 @@ description = "CircuitPython support for Seeed Studio's Grove Vision AI V2 board
 version = "0.0.0+auto.0"
 readme = "README.rst"
 authors = [
-    {name = "Metamagix", email = "ned@metamagix.tech"}
+    {name = "Ned Konz", email = "ned@metamagix.tech"}
 ]
 urls = {Homepage = "https://github.com/bikeNomad/CircuitPython_grove_vision_ai_v2"}
 keywords = [

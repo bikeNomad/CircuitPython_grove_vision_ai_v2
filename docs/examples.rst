@@ -11,11 +11,11 @@ Steps:
        using its USB-C connector.
        I used this model: https://sensecraft.seeed.cc/ai/view-model/60086-person-detection-swift-yolo
 
-    3. Copy ``human_follower.mpy`` to your ``CIRCUITPY/`` drive.
+    2. Copy ``human_follower.mpy`` to your ``CIRCUITPY/`` drive.
 
-    4. Copy ``grove_vision_ai_v2.mpy`` to ``CIRCUITPY/lib/``
+    3. Copy ``grove_vision_ai_v2.mpy`` to ``CIRCUITPY/lib/``
 
-    5. Create ``CIRCUITPY/code.py`` with the following content:
+    4. Create ``CIRCUITPY/code.py`` with the following content:
 
 .. code-block:: python
 

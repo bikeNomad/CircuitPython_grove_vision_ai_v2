@@ -46,7 +46,7 @@ from grove_vision_ai_v2 import CMD_OK, ATDevice, Box
 # Configuration
 # Scaling (pixels to degrees)
 # FOV 72 degrees over 240 pixels:
-PIXEL_SCALE = -72.0/240
+PIXEL_SCALE = -72.0 / 240
 HALF_IMAGE_WIDTH = const(120)
 
 # Pin usage (change as necessary)
