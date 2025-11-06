@@ -157,10 +157,7 @@ class Box:
         self.target = target
 
     def __repr__(self) -> str:
-        return (
-            f"Box(x={self.x}, y={self.y}, w={self.w}, h={self.h}, "
-            f"score={self.score}, target={self.target})"
-        )
+        return f"Box(x={self.x}, y={self.y}, w={self.w}, h={self.h}, score={self.score}, target={self.target})"  # noqa: E501
 
     @property
     def left(self) -> float:
@@ -438,14 +435,12 @@ class ATDevice:  # noqa: PLR0904
                     print(f"<=(NEW) {response}")
                     print(
                         f"[TIMING] _fetch_response: waited {wait_for_first:.1f}ms for first byte, "
-                        f"total {elapsed:.1f}ms, {poll_count} polls, {index} bytes"
+                        + f"total {elapsed:.1f}ms, {poll_count} polls, {index} bytes"
                     )
                 return response
         if self.debug:
-            print(
-                f"[TIMEOUT] _fetch_response timed out after {(now() - t_start) * 1000:.1f}ms, "
-                f"{poll_count} polls"
-            )
+            duration = (now() - t_start) * 1000
+            print(f"[TIMEOUT] _fetch_response timed out after {duration:.1f}ms, {poll_count} polls")
         return None
 
     def _parse_perf(self, data: dict) -> None:
