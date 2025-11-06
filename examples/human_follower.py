@@ -15,6 +15,7 @@ Hardware Requirements:
 
 Setup:
     1. Flash a person or face detection model to the Grove Vision AI V2
+       I used this model: https://sensecraft.seeed.cc/ai/view-model/60086-person-detection-swift-yolo
     2. Copy this file to CIRCUITPY volume as main.py
     3. Copy grove_vision_ai_v2.mpy to CIRCUITPY/lib/
     4. Delete code.py if present

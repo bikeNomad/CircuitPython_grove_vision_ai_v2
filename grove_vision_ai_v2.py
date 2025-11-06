@@ -28,6 +28,9 @@ Implementation Notes
 
 **Software and Dependencies:**
 
+* Sensecraft AI (web based):
+  https://sensecraft.seeed.cc/ai/home
+
 * Adafruit CircuitPython firmware for the supported boards:
   https://circuitpython.org/downloads
 
