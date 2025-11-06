@@ -59,56 +59,64 @@ now = time.monotonic
 
 # AT commands from the Arduino library
 # Tested
-CMD_AT_ACTION = const("ACTION")
-CMD_AT_ACTION_STATUS = const("ACTION?")
-CMD_AT_ALGOS = const("ALGOS?")
-CMD_AT_BREAK = const("BREAK")
-CMD_AT_ID = const("ID?")
-CMD_AT_INFO = const("INFO?")
-CMD_AT_INVOKE = const("INVOKE")
-CMD_AT_MODEL = const("MODEL")  # e.g. MODEL=1
-CMD_AT_MODELS = const("MODELS?")
-CMD_AT_MODEL_STATUS = const("MODEL?")
-CMD_AT_NAME = const("NAME?")
-CMD_AT_RESET = const("RST")
-CMD_AT_SAMPLE = const("SAMPLE")
-CMD_AT_SAMPLE_STATUS = const("SAMPLE?")
-CMD_AT_SAVE_JPEG = const("save_jpeg()")  # not tested with SD card
-CMD_AT_SENSOR = const("SENSOR")
-CMD_AT_SENSORS = const("SENSORS?")
-CMD_AT_SENSOR_STATUS = const("SENSOR?")
-CMD_AT_STATUS = const("STAT?")
-CMD_AT_VERSION = const("VER?")
+CMD_AT_ACTION = "ACTION"
+CMD_AT_ACTION_STATUS = "ACTION?"
+CMD_AT_ALGOS = "ALGOS?"
+CMD_AT_BREAK = "BREAK"
+CMD_AT_ID = "ID?"
+CMD_AT_INFO = "INFO?"
+CMD_AT_INVOKE = "INVOKE"
+CMD_AT_MODEL = "MODEL"  # e.g. MODEL=1
+CMD_AT_MODELS = "MODELS?"
+CMD_AT_MODEL_STATUS = "MODEL?"
+CMD_AT_NAME = "NAME?"
+CMD_AT_RESET = "RST"
+CMD_AT_SAMPLE = "SAMPLE"
+CMD_AT_SAMPLE_STATUS = "SAMPLE?"
+CMD_AT_SAVE_JPEG = "save_jpeg()"  # not tested with SD card
+CMD_AT_SENSOR = "SENSOR"
+CMD_AT_SENSORS = "SENSORS?"
+CMD_AT_SENSOR_STATUS = "SENSOR?"
+CMD_AT_STATUS = "STAT?"
+CMD_AT_VERSION = "VER?"
 
 # Recognized but don't know args yet
-CMD_AT_LED = const("led")
-
-# 'name' values in event responses
-EVENT_INVOKE = const("INVOKE")
-EVENT_SAMPLE = const("SAMPLE")
-EVENT_SUPERVISOR = const("SUPERVISOR")
+CMD_AT_LED = "led"
 
 # 'type' values in responses
-CMD_TYPE_RESPONSE = const(0)
-CMD_TYPE_EVENT = const(1)
-CMD_TYPE_LOG = const(2)
+_CMD_TYPE_RESPONSE = const(0)
+_CMD_TYPE_EVENT = const(1)
+_CMD_TYPE_LOG = const(2)
 
 # 'code' values in responses
-CMD_OK = const(0)
-CMD_AGAIN = const(1)
-CMD_ELOG = const(2)
-CMD_ETIMEDOUT = const(3)
-CMD_EIO = const(4)
-CMD_EINVAL = const(5)
-CMD_ENOMEM = const(6)
-CMD_EBUSY = const(7)
-CMD_ENOTSUP = const(8)
-CMD_EPERM = const(9)
-CMD_EUNKNOWN = const(10)
+CMD_OK = 0
+CMD_AGAIN = 1
+CMD_ELOG = 2
+CMD_ETIMEDOUT = 3
+CMD_EIO = 4
+CMD_EINVAL = 5
+CMD_ENOMEM = 6
+CMD_EBUSY = 7
+CMD_ENOTSUP = 8
+CMD_EPERM = 9
+CMD_EUNKNOWN = 10
 
 RESPONSE_PREFIX = const(b"\r{")
 RESPONSE_SUFFIX = const(b"}\n")
 
+_CODE_DECODE_TABLE = {
+    0: "OK",
+    1: "AGAIN",
+    2: "ELOG",
+    3: "ETIMEDOUT",
+    4: "EIO",
+    5: "EINVAL",
+    6: "ENOMEM",
+    7: "EBUSY",
+    8: "ENOTSUP",
+    9: "EPERM",
+    10: "EUNKNOWN",
+}
 
 class DecodeError(ValueError):
     pass
@@ -489,7 +497,7 @@ class ATDevice:  # noqa: PLR0904
             self._image = None
 
     def _parse_event(self, response: dict) -> None:
-        """Handle a JSON event response (type=CMD_TYPE_EVENT).
+        """Handle a JSON event response (type=_CMD_TYPE_EVENT).
 
         Extracts inference results (boxes, classes, points, keypoints, images)
         from INVOKE and SAMPLE events and updates instance attributes.
@@ -512,7 +520,7 @@ class ATDevice:  # noqa: PLR0904
         self._parse_image(data)
 
     def _parse_log(self, response: dict) -> None:
-        """Handle a log JSON response (type=CMD_TYPE_LOG)."""
+        """Handle a log JSON response (type=_CMD_TYPE_LOG)."""
         # print(response)
         pass
 
@@ -525,9 +533,9 @@ class ATDevice:  # noqa: PLR0904
             response = self._response = self._parse_json(resp)
 
             retval: int = response["code"]
-            if response["type"] == CMD_TYPE_EVENT:
+            if response["type"] == _CMD_TYPE_EVENT:
                 self._parse_event(response)
-            elif response["type"] == CMD_TYPE_LOG:
+            elif response["type"] == _CMD_TYPE_LOG:
                 self._parse_log(response)
                 return retval
 
@@ -574,8 +582,8 @@ class ATDevice:  # noqa: PLR0904
             ...         print(f"Detected object at ({box.x}, {box.y})")
         """
         self._send_command(f"{CMD_AT_INVOKE}={times},{int(diffonly)},{int(resultonly)}")
-        if (err := self._wait(CMD_TYPE_RESPONSE, CMD_AT_INVOKE, 0.05)) == CMD_OK:
-            return self._wait(CMD_TYPE_EVENT, CMD_AT_INVOKE, timeout)
+        if (err := self._wait(_CMD_TYPE_RESPONSE, CMD_AT_INVOKE, 0.05)) == CMD_OK:
+            return self._wait(_CMD_TYPE_EVENT, CMD_AT_INVOKE, timeout)
         return err
 
     def sample_image(self, times: int = 1, timeout: float = 0.1) -> int:
@@ -596,8 +604,8 @@ class ATDevice:  # noqa: PLR0904
             ...         f.write(ai.image.data)
         """
         self._send_command(f"{CMD_AT_SAMPLE}={times}")
-        if (err := self._wait(CMD_TYPE_RESPONSE, CMD_AT_SAMPLE, 0.05)) == CMD_OK:
-            return self._wait(CMD_TYPE_EVENT, CMD_AT_SAMPLE, timeout)
+        if (err := self._wait(_CMD_TYPE_RESPONSE, CMD_AT_SAMPLE, 0.05)) == CMD_OK:
+            return self._wait(_CMD_TYPE_EVENT, CMD_AT_SAMPLE, timeout)
         return err
 
     def id(self, cache: bool = True) -> str | None:
@@ -613,7 +621,7 @@ class ATDevice:  # noqa: PLR0904
             return self._id
 
         self._send_command(CMD_AT_ID)
-        if self._wait(CMD_TYPE_RESPONSE, CMD_AT_ID) == CMD_OK:
+        if self._wait(_CMD_TYPE_RESPONSE, CMD_AT_ID) == CMD_OK:
             if self._response:
                 self._id = self._response["data"]
                 return self._id
@@ -632,7 +640,7 @@ class ATDevice:  # noqa: PLR0904
             return self._name
 
         self._send_command(CMD_AT_NAME)
-        if self._wait(CMD_TYPE_RESPONSE, CMD_AT_NAME, 3.0) == CMD_OK:
+        if self._wait(_CMD_TYPE_RESPONSE, CMD_AT_NAME, 3.0) == CMD_OK:
             if self._response:
                 self._name = self._response["data"]
                 return self._name
@@ -651,7 +659,7 @@ class ATDevice:  # noqa: PLR0904
             return self._version
 
         self._send_command(CMD_AT_VERSION)
-        if self._wait(CMD_TYPE_RESPONSE, CMD_AT_VERSION) == CMD_OK:
+        if self._wait(_CMD_TYPE_RESPONSE, CMD_AT_VERSION) == CMD_OK:
             if self.response:
                 self._version = self.response["data"]
                 return self._version
@@ -683,7 +691,7 @@ class ATDevice:  # noqa: PLR0904
             return self._info
 
         self._send_command(CMD_AT_INFO)
-        if self._wait(CMD_TYPE_RESPONSE, CMD_AT_INFO, 3.0) == CMD_OK:
+        if self._wait(_CMD_TYPE_RESPONSE, CMD_AT_INFO, 3.0) == CMD_OK:
             if self._response:
                 self._info = self._response["data"]["info"]
                 return self._info
@@ -733,7 +741,7 @@ class ATDevice:  # noqa: PLR0904
             CMD_OK (0) on success, or error code.
         """
         self._send_command(f'{CMD_AT_ACTION}=""')
-        return self._wait(CMD_TYPE_RESPONSE, CMD_AT_ACTION)
+        return self._wait(_CMD_TYPE_RESPONSE, CMD_AT_ACTION)
 
     def save_jpeg(self) -> int:
         """Configure the board to save captured images to SD card.
@@ -745,7 +753,7 @@ class ATDevice:  # noqa: PLR0904
             CMD_OK (0) on success, or error code.
         """
         self._send_command(f'{CMD_AT_ACTION}="{CMD_AT_SAVE_JPEG}"')
-        return self._wait(CMD_TYPE_RESPONSE, CMD_AT_ACTION)
+        return self._wait(_CMD_TYPE_RESPONSE, CMD_AT_ACTION)
 
     def perform_command(self, cmd: str, tag: str | None = None) -> int:
         """Perform a raw AT command.
@@ -767,12 +775,24 @@ class ATDevice:  # noqa: PLR0904
         while retries < 2:
             self._send_command(cmd, tag)
             try:
-                return self._wait(CMD_TYPE_RESPONSE, cmd)
+                return self._wait(_CMD_TYPE_RESPONSE, cmd)
             # Retry on decode error
             except DecodeError:
                 retries += 1
                 continue
         return CMD_ETIMEDOUT
+
+    @staticmethod
+    def get_error_name(code: int) -> str:
+        """Get the string name for a given error code.
+
+        Args:
+            code: The integer error code.
+
+        Returns:
+            The string representation of the error code (e.g., "OK", "ETIMEDOUT").
+        """
+        return _CODE_DECODE_TABLE.get(code, f"UNKNOWN({code})")
 
 
 __name__ = "grove_vision_ai_v2"
