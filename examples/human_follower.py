@@ -14,11 +14,18 @@ Hardware Requirements:
     - LED for visual feedback (uses LED_BLUE by default)
 
 Setup:
-    1. Flash a person or face detection model to the Grove Vision AI V2
-       I used this model: https://sensecraft.seeed.cc/ai/view-model/60086-person-detection-swift-yolo
-    2. Copy this file to CIRCUITPY volume as main.py
-    3. Copy grove_vision_ai_v2.mpy to CIRCUITPY/lib/
-    4. Delete code.py if present
+    1. Flash a person or face detection model from Sensecraft AI to the Grove Vision AI V2
+       using its USB-C connector.
+       I used this model:
+       https://sensecraft.seeed.cc/ai/view-model/60086-person-detection-swift-yolo
+
+    2. Copy `human_follower.mpy` to your `CIRCUITPY/` drive.
+
+    3. Copy `grove_vision_ai_v2.mpy` to `CIRCUITPY/lib/`
+
+    4. Create `CIRCUITPY/code.py` with the following content:
+
+        import human_follower
 
 The servo uses exponential smoothing for smooth motion, and the LED indicates
 when a person is detected.
@@ -46,7 +53,7 @@ HALF_IMAGE_WIDTH = const(120)
 TX_PIN = board.TX
 RX_PIN = board.RX
 SERVO_PWM_PIN = board.D0
-LED_PIN = board.LED_BLUE
+LED_PIN = board.D1  # active low
 
 SMOOTH_ALPHA = const(0.25)
 
@@ -57,7 +64,6 @@ pwm = pwmio.PWMOut(SERVO_PWM_PIN, duty_cycle=2**15, frequency=50)
 motor = servo.Servo(pwm)
 led = DigitalInOut(LED_PIN)
 led.switch_to_output(value=True)
-
 target_angle = 90
 motor.angle = target_angle  # [0..180]
 
@@ -161,8 +167,8 @@ while True:
         started = now()
         err = ai.invoke(1, True, True)
         duration = int((now() - started) * 1000)
-        enable_led(False)
         if err != CMD_OK:
+            enable_led(False)
             print(f"{duration} No response")
             set_motor(target_angle)
             continue
@@ -172,6 +178,10 @@ while True:
             target_angle = best_angle
             print(f"{duration} Boxes: {ai.boxes}, Perf: {ai.perf}")
             set_motor(best_angle)
+        else:
+            enable_led(False)
+            print(f"{duration} No boxes")
+            set_motor(target_angle)
     except ValueError as e:
         print(e)
     except KeyboardInterrupt:
